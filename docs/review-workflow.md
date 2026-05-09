@@ -244,18 +244,24 @@ vim.g.review_sidebar_width = 50  -- before opening (or change and reopen)
 
 ## Global `<leader>r*` Keymaps
 
-Active automatically when nvim is launched from a review shell:
+Active automatically when nvim is launched from a review shell. Marked
+**(sidebar-aware)** keymaps work both from a file buffer *and* from inside the
+sidebar — they dispatch on context.
 
 | Keys | Action |
 |---|---|
-| `<leader>rd` | Toggle sidebar |
-| `<leader>rh` | Stage current hunk (gitsigns) |
-| `<leader>rl` | Stage visual line range (gitsigns, visual mode) |
-| `<leader>rf` | Stage whole file (gitsigns) |
+| `<leader>rr` | Toggle sidebar |
+| `<leader>rd` | Open colored diff view **(sidebar-aware)** — sidebar: file under cursor; file buffer: current file |
+| `<leader>rf` | Stage file **(sidebar-aware)** — sidebar: file under cursor; file buffer: stage_buffer |
+| `<leader>rh` | Stage current hunk (gitsigns; file buffer only) |
+| `<leader>rl` | Stage visual line range (gitsigns, visual mode; file buffer only) |
 | `<leader>rc` | Commit reviewed batch (prompts) |
-| `<leader>ru` | Undo last batch (`git reset --soft HEAD~1`) |
 | `<leader>rs` | Status floating window |
+| `<leader>ru` | Refresh sidebar |
+| `<leader>rZ` | Undo last batch (`git reset --soft HEAD~1`) — prompts before running |
 | `<leader>rn` | Jump to next unreviewed file |
+
+`<leader>rr`, `<leader>rd`, `<leader>rf`, `<leader>rc`, `<leader>rs`, `<leader>ru`, and `<leader>rZ` all fire correctly with the cursor inside the sidebar (the buffer-local keymaps deliberately don't bind `<Space>`, so the leader key passes through).
 
 To disable the default keymaps: `vim.g.review_no_default_mappings = 1` in your nvim config. The plugin still exposes commands (`:Review*`).
 

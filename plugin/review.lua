@@ -28,12 +28,14 @@ if vim.g.review_no_default_mappings ~= 1 then
   local map = function(mode, lhs, rhs, desc)
     vim.keymap.set(mode, lhs, rhs, { silent = true, desc = desc })
   end
-  map("n", "<leader>rd", function() review.sidebar().toggle() end, "review: toggle sidebar")
+  map("n", "<leader>rr", function() review.sidebar().toggle() end, "review: toggle sidebar")
+  map("n", "<leader>rd", review.open_diff_view,                    "review: open diff view")
   map("n", "<leader>rh", review.stage_hunk,                        "review: stage hunk")
   map("v", "<leader>rl", review.stage_range,                       "review: stage line range")
-  map("n", "<leader>rf", review.stage_buffer,                      "review: stage file")
+  map("n", "<leader>rf", review.stage_file,                        "review: stage file (context-aware)")
   map("n", "<leader>rc", review.commit_batch,                      "review: commit batch")
-  map("n", "<leader>ru", review.undo_last_batch,                   "review: undo last batch")
+  map("n", "<leader>ru", review.refresh_sidebar,                   "review: refresh sidebar")
+  map("n", "<leader>rZ", review.undo_last_batch,                   "review: undo last batch (prompts)")
   map("n", "<leader>rs", review.show_status,                       "review: status")
   map("n", "<leader>rn", review.next_unreviewed_file,              "review: next unreviewed file")
 end

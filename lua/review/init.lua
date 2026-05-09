@@ -41,13 +41,43 @@ function M.stage_range()
   end
 end
 
-function M.stage_buffer()
+-- Stage "the file" — context-aware:
+--   - if cursor is in the sidebar, stage the file under cursor
+--   - otherwise, stage the current buffer
+function M.stage_file()
+  if vim.bo.filetype == "review-sidebar" then
+    require("review.sidebar").toggle_stage()
+    return
+  end
   if has_gitsigns() then
     require("gitsigns").stage_buffer()
   else
     local file = vim.fn.expand("%:p")
     vim.fn.system({ "git", "add", "--", file })
   end
+end
+
+-- Refresh the sidebar (re-reads `git status` / `git diff`). No-op if the
+-- sidebar isn't currently open.
+function M.refresh_sidebar()
+  require("review.sidebar").refresh()
+end
+
+-- Open colored diff for "the file" — context-aware:
+--   - if cursor is in the sidebar, open the diff for the file under cursor
+--   - otherwise, open the diff for the current buffer's file
+function M.open_diff_view()
+  if vim.bo.filetype == "review-sidebar" then
+    require("review.sidebar").open_diff()
+    return
+  end
+  local file = vim.fn.expand("%:.")
+  if file == "" then
+    vim.notify("review: no file in current buffer", vim.log.levels.WARN)
+    return
+  end
+  -- Pass nil for target_win → open_diff_for creates a rightbelow vsplit.
+  require("review.sidebar").open_diff_for(file, nil)
 end
 
 function M.commit_batch()

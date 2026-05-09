@@ -259,31 +259,32 @@ function M.open_file()
   vim.cmd("edit " .. vim.fn.fnameescape(f.path))
 end
 
--- Open a colored diff for the file under cursor in the target window.
--- Uses vim's built-in `diff` filetype for syntax highlighting (no plugins).
-function M.open_diff()
-  local f = file_at_cursor()
-  if not f then return end
+-- Open a colored diff for the given path. Tier-fallback: unreviewed → staged
+-- → full review-relative. If `target_win` is given (and valid), the diff
+-- replaces that window's buffer; otherwise a `rightbelow vsplit` is created.
+function M.open_diff_for(path, target_win)
+  if not path or path == "" then return end
 
-  -- Prefer the unreviewed diff (working vs index). Fall back to staged
-  -- (index vs HEAD) if everything is staged. Final fallback shows the
-  -- full review-relative diff (HEAD).
-  local lines = git({ "diff", "--", f.path })
+  local lines = git({ "diff", "--", path })
   local label = "unreviewed"
   if #lines == 0 then
-    lines = git({ "diff", "--cached", "--", f.path })
+    lines = git({ "diff", "--cached", "--", path })
     label = "staged"
   end
   if #lines == 0 then
-    lines = git({ "diff", "HEAD", "--", f.path })
+    lines = git({ "diff", "HEAD", "--", path })
     label = "all"
   end
   if #lines == 0 then
-    vim.notify("review: no diff for " .. f.path, vim.log.levels.INFO)
+    vim.notify("review: no diff for " .. path, vim.log.levels.INFO)
     return
   end
 
-  ensure_target_win()
+  if not target_win or not vim.api.nvim_win_is_valid(target_win) then
+    vim.cmd("rightbelow vsplit")
+    target_win = vim.api.nvim_get_current_win()
+  end
+
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
   vim.bo[buf].buftype   = "nofile"
@@ -291,10 +292,18 @@ function M.open_diff()
   vim.bo[buf].swapfile  = false
   vim.bo[buf].modifiable = false
   vim.bo[buf].filetype  = "diff"
-  vim.api.nvim_buf_set_name(buf, "review-diff://" .. label .. "/" .. f.path)
-  vim.api.nvim_win_set_buf(state.target_win, buf)
+  vim.api.nvim_buf_set_name(buf, "review-diff://" .. label .. "/" .. path)
+  vim.api.nvim_win_set_buf(target_win, buf)
   vim.keymap.set("n", "q", "<cmd>close<cr>",
     { buffer = buf, silent = true, desc = "close diff" })
+end
+
+-- Sidebar `o` keymap: open diff for file under cursor, into the target window.
+function M.open_diff()
+  local f = file_at_cursor()
+  if not f then return end
+  ensure_target_win()
+  M.open_diff_for(f.path, state.target_win)
 end
 
 function M.toggle_stage()
