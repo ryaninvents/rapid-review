@@ -259,6 +259,89 @@ function M.open_file()
   vim.cmd("edit " .. vim.fn.fnameescape(f.path))
 end
 
+-- Stage the hunk under the cursor in a diff-view buffer. Locates the
+-- enclosing hunk by walking backward to `^@@` and forward to the next `@@`
+-- or `^diff --git`, then prepends the file header (`diff --git`/`---`/`+++`
+-- block) and pipes the result to `git apply --cached --recount`. The
+-- --recount flag means we don't have to recompute line counts.
+function M.stage_hunk_in_diff()
+  local buf = vim.api.nvim_get_current_buf()
+  local row = vim.api.nvim_win_get_cursor(0)[1]
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+
+  -- Find hunk start (^@@) walking backward.
+  local hunk_start
+  for i = row, 1, -1 do
+    if lines[i] and lines[i]:match("^@@") then hunk_start = i; break end
+  end
+  if not hunk_start then
+    vim.notify("review: no hunk under cursor", vim.log.levels.WARN)
+    return
+  end
+
+  -- Hunk end: next @@ or next file header, else EOF.
+  local hunk_end = #lines
+  for i = hunk_start + 1, #lines do
+    if lines[i]:match("^@@") or lines[i]:match("^diff %-%-git") then
+      hunk_end = i - 1
+      break
+    end
+  end
+
+  -- File header: walk back from hunk_start to find `^diff --git`.
+  local fh_start
+  for i = hunk_start - 1, 1, -1 do
+    if lines[i]:match("^diff %-%-git") then fh_start = i; break end
+  end
+  if not fh_start then
+    vim.notify("review: no file header found above hunk", vim.log.levels.ERROR)
+    return
+  end
+
+  -- File header runs through the `+++ ` line.
+  local fh_end
+  for i = fh_start, hunk_start - 1 do
+    if lines[i]:match("^%+%+%+") then fh_end = i; break end
+  end
+  if not fh_end then
+    vim.notify("review: malformed diff (no +++ line)", vim.log.levels.ERROR)
+    return
+  end
+
+  local patch = {}
+  for i = fh_start, fh_end   do table.insert(patch, lines[i]) end
+  for i = hunk_start, hunk_end do table.insert(patch, lines[i]) end
+  table.insert(patch, "")  -- trailing newline so git is happy
+
+  local out = vim.fn.system(
+    { "git", "apply", "--cached", "--recount", "-" },
+    table.concat(patch, "\n"))
+  if vim.v.shell_error ~= 0 then
+    vim.notify("review: stage hunk failed: " .. out, vim.log.levels.ERROR)
+    return
+  end
+
+  vim.notify("review: hunk staged")
+
+  -- Refresh the diff buffer so the staged hunk disappears, and the sidebar.
+  -- Preserve the cursor row across the reload — staged hunk vanishes from the
+  -- buffer, so the same row number lands the user on the next hunk (or
+  -- adjacent context), which is the natural place to continue reviewing.
+  local diff_path = lines[fh_end]:match("^%+%+%+ b/(.+)$")
+                 or lines[fh_end]:match("^%+%+%+ (.+)$")
+  local saved_row = vim.api.nvim_win_get_cursor(0)[1]
+  if diff_path then
+    local win = vim.api.nvim_get_current_win()
+    M.open_diff_for(diff_path, win)
+    if vim.api.nvim_win_is_valid(win) then
+      local new_count = vim.api.nvim_buf_line_count(vim.api.nvim_win_get_buf(win))
+      local target = math.max(1, math.min(saved_row, new_count))
+      pcall(vim.api.nvim_win_set_cursor, win, { target, 0 })
+    end
+  end
+  pcall(M.refresh)
+end
+
 -- Open a colored diff for the given path. Tier-fallback: unreviewed → staged
 -- → full review-relative. If `target_win` is given (and valid), the diff
 -- replaces that window's buffer; otherwise a `rightbelow vsplit` is created.
@@ -294,8 +377,25 @@ function M.open_diff_for(path, target_win)
   vim.bo[buf].filetype  = "diff"
   vim.api.nvim_buf_set_name(buf, "review-diff://" .. label .. "/" .. path)
   vim.api.nvim_win_set_buf(target_win, buf)
+  -- Mark with a buffer-scoped flag so <leader>rh / <leader>rd / etc. can
+  -- detect we're in a review-managed diff buffer (filetype stays "diff" so
+  -- vim's built-in diff syntax highlighting still applies).
+  vim.b[buf].review_diff = true
   vim.keymap.set("n", "q", "<cmd>close<cr>",
     { buffer = buf, silent = true, desc = "close diff" })
+  vim.keymap.set("n", "s", M.stage_hunk_in_diff,
+    { buffer = buf, silent = true, desc = "review: stage hunk under cursor" })
+
+  -- Hide leader maps that don't apply in a diff view (gitsigns isn't attached
+  -- here, so <leader>rh / <leader>rl would no-op confusingly).
+  -- `s` provides the diff-aware stage-hunk action; line-staging in a diff
+  -- view requires partial-hunk patches and is intentionally not implemented.
+  local hide = function(mode, lhs)
+    vim.keymap.set(mode, lhs, function() end,
+      { buffer = buf, silent = true, desc = "which_key_ignore" })
+  end
+  hide("n", "<leader>rh")
+  hide("v", "<leader>rl")
 end
 
 -- Sidebar `o` keymap: open diff for file under cursor, into the target window.
@@ -431,6 +531,16 @@ function M.open()
   map("n", "<CR>",           M.open_file,    "review: open file")
   -- Double-click also opens the file. Single-click just moves the cursor (vim default).
   map("n", "<2-LeftMouse>",  M.open_file,    "review: open file (double-click)")
+
+  -- Hide leader maps that don't apply here from the which-key menu by
+  -- shadowing them with which_key_ignore-tagged buffer-local no-ops.
+  -- The hunk- and line-stage operations only make sense in a file buffer.
+  local hide = function(mode, lhs)
+    vim.keymap.set(mode, lhs, function() end,
+      { buffer = buf, silent = true, desc = "which_key_ignore" })
+  end
+  hide("n", "<leader>rh")
+  hide("v", "<leader>rl")
 
   -- Auto-refresh after writes in the project, since they may change `git diff`.
   local group = vim.api.nvim_create_augroup("ReviewSidebar", { clear = true })

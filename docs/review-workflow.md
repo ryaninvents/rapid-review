@@ -215,7 +215,7 @@ vim.api.nvim_set_hl(0, "ReviewSidebarDimmed", { fg = "#666666", ctermfg = 240 })
 |---|---|
 | `j` / `k` | move down / up |
 | `l` (or `<CR>`, or double-click) | open file in adjacent window |
-| `o` | open colored diff in adjacent window (`q` closes the diff buffer) |
+| `o` | open colored diff in adjacent window (`q` closes; `s` stages the hunk under cursor) |
 | `s` | toggle stage/unstage for the file under cursor |
 | `V`-select then `s` | stage every selected file (visual mode) |
 | `c` | prompt for commit message and commit staged files |
@@ -273,7 +273,7 @@ To disable the default keymaps: `vim.g.review_no_default_mappings = 1` in your n
 - **Whole-file fast path:** put cursor on a sidebar row, hit `s` — the entire file stages in one keystroke. Then `c` to commit a batch.
 - **Multi-file fast path:** `V`-select several rows in the sidebar, hit `s` — every selected file stages at once.
 - **Single-line staging:** inside a buffer, put cursor on a line, `V` to enter visual line mode, then `:Gitsigns stage_hunk`. Selected lines stage regardless of hunk boundaries.
-- **Quick diff peek:** in the sidebar, `o` opens a syntax-highlighted diff buffer in the adjacent window. `q` closes it.
+- **Quick diff peek:** in the sidebar, `o` opens a syntax-highlighted diff buffer in the adjacent window. Inside it, `s` stages the hunk under the cursor (the diff reloads with that hunk gone, cursor preserved). `q` closes.
 - **Multiple PRs in flight:** `review-list` shows all stores; `review-shell` with no arg auto-picks if exactly one exists.
 - **Lines that re-appear after a pull:** those are exactly the ones someone changed since your previous review pass. Re-read only those.
 - **Coming back to a session:** the store persists. Just `review-shell pr-123` again. State is durable until you `review-end`.
