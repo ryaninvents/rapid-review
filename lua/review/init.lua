@@ -22,12 +22,23 @@ local function has_gitsigns()
   return pcall(require, "gitsigns")
 end
 
+-- Sidebar refresh after a status-affecting action. Deferred slightly so the
+-- index has time to settle (gitsigns is async; the User GitSignsUpdate
+-- autocmd in sidebar.lua handles the gitsigns path explicitly, but this
+-- catches the no-gitsigns fallbacks too).
+local function refresh_sidebar_soon()
+  vim.defer_fn(function()
+    pcall(function() require("review.sidebar").refresh() end)
+  end, 50)
+end
+
 function M.stage_hunk()
   if has_gitsigns() then
     require("gitsigns").stage_hunk()
   else
     vim.notify("review: gitsigns not available", vim.log.levels.WARN)
   end
+  refresh_sidebar_soon()
 end
 
 function M.stage_range()
@@ -39,6 +50,7 @@ function M.stage_range()
   else
     vim.notify("review: gitsigns not available", vim.log.levels.WARN)
   end
+  refresh_sidebar_soon()
 end
 
 -- Stage "the file" — context-aware:
@@ -55,6 +67,7 @@ function M.stage_file()
     local file = vim.fn.expand("%:p")
     vim.fn.system({ "git", "add", "--", file })
   end
+  refresh_sidebar_soon()
 end
 
 -- Refresh the sidebar (re-reads `git status` / `git diff`). No-op if the
