@@ -332,15 +332,16 @@ function M.toggle_stage()
   M.refresh()
 end
 
--- Stage every file in the current visual line range.
--- Multi-select doesn't toggle (the semantics are ambiguous when the selection
--- mixes states); it always stages. Unstage individual rows in normal mode.
-function M.stage_visual()
+-- Toggle staged-state for every file in the current visual line range.
+-- Group semantics: if any selected file has unstaged content, the action is
+-- "stage all" (covering mixed selections — the user's intent is to bring the
+-- group to a fully-staged state). If every selected file is already fully
+-- staged, the action is "unstage all".
+function M.toggle_visual()
   -- Use the V-mark range. After leaving visual mode, '< and '> hold the bounds.
   -- We're called while still in visual mode via <Esc> first to commit the marks.
   local mode = vim.fn.mode()
   if mode == "V" or mode == "v" or mode == "" then
-    -- "Esc" out so the marks update.
     vim.cmd('execute "normal! \\<Esc>"')
   end
   local s = vim.fn.line("'<")
@@ -348,20 +349,42 @@ function M.stage_visual()
   if s == 0 or e == 0 then return end
   if s > e then s, e = e, s end
 
-  local touched = 0
+  local files_in_range = {}
+  local any_unstaged = false
   for row = s, e do
     local f = state.files[row]
-    if f and f.has_unstaged then
-      git({ "add", "--", f.path })
-      touched = touched + 1
+    if f then
+      table.insert(files_in_range, f)
+      if f.has_unstaged then any_unstaged = true end
+    end
+  end
+  if #files_in_range == 0 then return end
+
+  local op = any_unstaged and "stage" or "unstage"
+  local touched = 0
+  for _, f in ipairs(files_in_range) do
+    if op == "stage" then
+      if f.has_unstaged then
+        git({ "add", "--", f.path })
+        touched = touched + 1
+      end
+    else
+      if f.has_staged then
+        git({ "reset", "HEAD", "--", f.path })
+        touched = touched + 1
+      end
     end
   end
   if touched > 0 then
-    vim.notify(string.format("review: staged %d file%s",
-      touched, touched == 1 and "" or "s"))
+    vim.notify(string.format("review: %sd %d file%s",
+      op, touched, touched == 1 and "" or "s"))
   end
   M.refresh()
 end
+
+-- Backwards-compat alias — old name kept so external configs that call it
+-- don't break. Routes through the toggle path now.
+M.stage_visual = M.toggle_visual
 
 function M.commit()
   vim.ui.input({ prompt = "Commit reviewed: ", default = "reviewed: " }, function(msg)
@@ -438,8 +461,8 @@ function M.open()
   -- (sidebar toggle, commit, status, etc.) from firing inside the sidebar.
   map("n", "l",              M.open_file,    "review: open file")
   map("n", "o",              M.open_diff,    "review: open colored diff")
-  map("n", "s",              M.toggle_stage, "review: toggle stage")
-  map("x", "s",              M.stage_visual, "review: stage selected files")
+  map("n", "s",              M.toggle_stage,  "review: toggle staged")
+  map("x", "s",              M.toggle_visual, "review: toggle staged (selection)")
   map("n", "c",              M.commit,       "review: commit reviewed batch")
   map("n", "r",              M.refresh,      "review: refresh")
   map("n", "q",              M.close,        "review: close sidebar")

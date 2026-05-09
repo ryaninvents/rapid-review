@@ -88,14 +88,15 @@ plugin/review.lua           # auto-loader (registers commands when in a review-s
 rapid-review.plugin.zsh     # antigen / oh-my-zsh entry point
 scripts/
   review-lib.sh             # shared helpers (sourced by the others)
-  review-start.sh           # init a review store
-  review-shell.sh           # subshell with GIT_DIR / GIT_WORK_TREE exported
-  review-status.sh          # progress summary
-  review-list.sh            # list active stores for $PWD
-  review-end.sh             # delete a store
-  review-refresh.sh         # git fetch + pull, show new outstanding diff
-  review-remaining.sh       # diff of remaining unreviewed code
-  nvim-review.sh            # launch nvim with sidebar open + explorer closed
+  review-start              # init a review store
+  review-shell              # subshell with GIT_DIR / GIT_WORK_TREE exported
+  nvim-review               # launch nvim with sidebar open + explorer closed
+  review-status             # progress summary
+  review-list               # list active stores for $PWD
+  review-end                # delete a store
+  review-refresh            # git fetch + pull, show new outstanding diff
+  review-remaining          # diff of remaining unreviewed code
+  review-help               # cheatsheet (or --full to open the doc)
 docs/review-workflow.md     # full reference
 ```
 
@@ -103,7 +104,8 @@ docs/review-workflow.md     # full reference
 
 - `git` 2.0+
 - `nvim` 0.8+ (for `winbar` support)
-- `gitsigns.nvim` (recommended — used by `<leader>rh` / `rl` / `rf` for hunk staging)
+- `gitsigns.nvim` (recommended — used by `<leader>rh` / `rl` for hunk staging,
+  and the sidebar auto-refreshes on its `User GitSignsUpdate` events)
 - `lazygit` (optional — works inside the review shell when launched via env)
 
 ## Quickstart
@@ -114,10 +116,58 @@ review-start pr-123
 review-shell pr-123
 nvim-review
 
-# In nvim: <leader>rd toggles the sidebar (already open via nvim-review).
-# `s` stages the file under cursor; V-select then `s` stages multiple.
-# `o` opens a colored diff. `c` commits a batch.
+# In nvim: <leader>rr toggles the sidebar (already open via nvim-review).
+# `s` toggles staged for the file under cursor; V-select then `s` toggles
+# the whole group. `o` opens a colored diff. `c` commits a batch.
 ```
+
+## Keymaps
+
+### Inside the sidebar (buffer-local)
+
+| Key | Action |
+|---|---|
+| `j` / `k` | navigate |
+| `l` (or `<CR>`, double-click) | open file in adjacent window |
+| `o` | open colored diff in adjacent window (`q` closes) |
+| `s` | toggle staged for the file under cursor |
+| `V`-select rows then `s` | toggle staged for the selection (stages all if any unstaged; else unstages all) |
+| `c` | prompt for commit message and commit staged files |
+| `r` | refresh sidebar |
+| `q` | close sidebar |
+
+### Global `<leader>r*` (active in a review-shell)
+
+`<leader>` is `<Space>` in LazyVim by default. Marked **(sidebar-aware)** keys
+work both from a file buffer *and* from inside the sidebar.
+
+| Keys | Action |
+|---|---|
+| `<leader>rr` | toggle sidebar |
+| `<leader>rd` | open colored diff view **(sidebar-aware)** |
+| `<leader>rf` | toggle staged file **(sidebar-aware)** |
+| `<leader>rh` | stage current hunk (gitsigns; file buffer only) |
+| `<leader>rl` | stage visual line range (gitsigns; file buffer only) |
+| `<leader>rc` | commit reviewed batch (prompts) |
+| `<leader>rs` | status floating window |
+| `<leader>ru` | refresh sidebar |
+| `<leader>rZ` | undo last batch — `git reset --soft HEAD~1` (prompts) |
+| `<leader>rn` | jump to next unreviewed file |
+
+The sidebar buffer-local keymaps deliberately **don't bind `<Space>`**, so
+`<leader>r*` mappings keep firing with the cursor inside the sidebar.
+
+`<leader>rh` and `<leader>rl` are hidden from which-key menus when the cursor
+is in the sidebar or diff view (gitsigns isn't attached there).
+
+The sidebar auto-refreshes on:
+- gitsigns `User GitSignsUpdate` / `GitSignsChanged` events
+- after every `<leader>r*` operation that affects status
+- after `BufWritePost` in any buffer
+- in response to its own `s` / `c` actions
+
+External staging (lazygit in another terminal, plain `git add`, etc.) still
+needs a manual `r` in the sidebar — there's no filesystem watcher.
 
 See [`docs/review-workflow.md`](docs/review-workflow.md) for the full reference.
 

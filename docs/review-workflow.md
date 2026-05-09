@@ -216,8 +216,8 @@ vim.api.nvim_set_hl(0, "ReviewSidebarDimmed", { fg = "#666666", ctermfg = 240 })
 | `j` / `k` | move down / up |
 | `l` (or `<CR>`, or double-click) | open file in adjacent window |
 | `o` | open colored diff in adjacent window (`q` closes) |
-| `s` | toggle stage/unstage for the file under cursor |
-| `V`-select then `s` | stage every selected file (visual mode) |
+| `s` | toggle staged for the file under cursor |
+| `V`-select then `s` | toggle staged for the selection — stages all if any unstaged; else unstages all |
 | `c` | prompt for commit message and commit staged files |
 | `r` | refresh |
 | `q` | close sidebar |
@@ -253,7 +253,7 @@ sidebar — they dispatch on context.
 |---|---|
 | `<leader>rr` | Toggle sidebar |
 | `<leader>rd` | Open colored diff view **(sidebar-aware)** — sidebar: file under cursor; file buffer: current file |
-| `<leader>rf` | Stage file **(sidebar-aware)** — sidebar: file under cursor; file buffer: stage_buffer |
+| `<leader>rf` | Toggle staged file **(sidebar-aware)** — sidebar: file under cursor; file buffer: stages if any unstaged content, else unstages |
 | `<leader>rh` | Stage current hunk (gitsigns; file buffer only) |
 | `<leader>rl` | Stage visual line range (gitsigns, visual mode; file buffer only) |
 | `<leader>rc` | Commit reviewed batch (prompts) |

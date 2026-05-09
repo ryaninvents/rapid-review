@@ -41,7 +41,7 @@ Inside the nvim sidebar:
   j / k          navigate
   l / <CR>       open file in adjacent window (double-click also works)
   o              open colored diff
-  s              toggle stage/unstage (V-select multiple rows to multi-stage)
+  s              toggle staged (V-select multiple rows for group toggle)
   c              commit reviewed batch
   r              refresh
   q              close
@@ -49,7 +49,7 @@ Inside the nvim sidebar:
 Global <leader>r* keymaps (nvim):
   rr             toggle sidebar
   rd             open diff view              (sidebar-aware)
-  rf             stage file                  (sidebar-aware)
+  rf             toggle staged file          (sidebar-aware)
   rh / rl        stage hunk / line range     (gitsigns; file buffer)
   rc             commit batch
   rs             status (floating window)

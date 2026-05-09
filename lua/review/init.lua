@@ -56,19 +56,46 @@ end
 -- Stage "the file" — context-aware:
 --   - if cursor is in the sidebar, stage the file under cursor
 --   - otherwise, stage the current buffer
-function M.stage_file()
+-- Toggle the staged-state of "the file" — context-aware:
+--   - if cursor is in the sidebar, toggle the file under cursor
+--   - if cursor is in a file buffer, toggle that file:
+--       * any unstaged content → stage everything (`git add` / gitsigns.stage_buffer)
+--       * fully staged          → unstage (`git reset HEAD --`)
+function M.toggle_staged_file()
   if vim.bo.filetype == "review-sidebar" then
     require("review.sidebar").toggle_stage()
     return
   end
-  if has_gitsigns() then
-    require("gitsigns").stage_buffer()
+  local file = vim.fn.expand("%:.")
+  if file == "" then
+    vim.notify("review: no file in current buffer", vim.log.levels.WARN)
+    return
+  end
+
+  -- "Has unstaged content" → exit code 1 from `git diff --quiet -- <file>`.
+  vim.fn.system({ "git", "diff", "--quiet", "--", file })
+  local has_unstaged = vim.v.shell_error ~= 0
+
+  if has_unstaged then
+    if has_gitsigns() then
+      require("gitsigns").stage_buffer()
+    else
+      vim.fn.system({ "git", "add", "--", file })
+    end
   else
-    local file = vim.fn.expand("%:p")
-    vim.fn.system({ "git", "add", "--", file })
+    vim.fn.system({ "git", "diff", "--cached", "--quiet", "--", file })
+    local has_staged = vim.v.shell_error ~= 0
+    if has_staged then
+      vim.fn.system({ "git", "reset", "HEAD", "--", file })
+    else
+      vim.notify("review: nothing to toggle for " .. file, vim.log.levels.INFO)
+    end
   end
   refresh_sidebar_soon()
 end
+
+-- Backwards-compat alias.
+M.stage_file = M.toggle_staged_file
 
 -- Refresh the sidebar (re-reads `git status` / `git diff`). No-op if the
 -- sidebar isn't currently open.
