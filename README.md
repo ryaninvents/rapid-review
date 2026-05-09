@@ -173,4 +173,4 @@ See [`docs/review-workflow.md`](docs/review-workflow.md) for the full reference.
 
 ## License
 
-MIT (or whatever you'd like — update this section before publishing widely).
+[MIT](LICENSE) © Ryan Kennedy
