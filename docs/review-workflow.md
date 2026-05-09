@@ -159,6 +159,7 @@ Confirms first if there's still unreviewed code. Deletes the store.
 | `review-refresh [<slug>]` | `git fetch` + `git pull --ff-only` (run outside review-shell) |
 | `review-remaining [<slug>] [-- <git-diff-args>]` | Diff of remaining unreviewed code |
 | `review-end <slug> [--force]` | Delete the store |
+| `review-help [--full]` | Cheatsheet (or open this doc in `$PAGER`) |
 
 ---
 

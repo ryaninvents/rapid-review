@@ -37,28 +37,40 @@ export REVIEW_STORE="$store"
 # we set RPS1 (zsh) or PS1 prefix (bash) only for the spawned shell.
 prompt_prefix="(review:${slug}) "
 
+# Banner printed once when the spawned shell starts. Kept short — full
+# reference is `review-help` (or `review-help --full`).
+banner_text=$(cat <<EOF
+
+  📋 review:${slug} — type 'review-help' for commands · 'nvim-review' to start
+
+EOF
+)
+
 case "$(basename "$shell_bin")" in
   zsh)
     # Use a tmp ZDOTDIR so we can inject the prompt without touching the user's .zshrc.
     tmpdir=$(mktemp -d -t review-shell-XXXXXX)
     trap 'rm -rf "$tmpdir"' EXIT
-    cat > "$tmpdir/.zshrc" <<EOF
-[[ -f "\$HOME/.zshrc" ]] && source "\$HOME/.zshrc"
-PROMPT="%F{cyan}${prompt_prefix}%f\$PROMPT"
-EOF
+    {
+      echo "[[ -f \"\$HOME/.zshrc\" ]] && source \"\$HOME/.zshrc\""
+      echo "PROMPT=\"%F{cyan}${prompt_prefix}%f\$PROMPT\""
+      printf 'cat <<'\''__RR_BANNER__'\''\n%s\n__RR_BANNER__\n' "$banner_text"
+    } > "$tmpdir/.zshrc"
     ZDOTDIR="$tmpdir" exec "$shell_bin" -i
     ;;
   bash)
     tmprc=$(mktemp -t review-shell-bashrc-XXXXXX)
     trap 'rm -f "$tmprc"' EXIT
-    cat > "$tmprc" <<EOF
-[[ -f "\$HOME/.bashrc" ]] && source "\$HOME/.bashrc"
-PS1="\\[\\e[36m\\]${prompt_prefix}\\[\\e[0m\\]\$PS1"
-EOF
+    {
+      echo "[[ -f \"\$HOME/.bashrc\" ]] && source \"\$HOME/.bashrc\""
+      echo "PS1=\"\\[\\e[36m\\]${prompt_prefix}\\[\\e[0m\\]\$PS1\""
+      printf 'cat <<'\''__RR_BANNER__'\''\n%s\n__RR_BANNER__\n' "$banner_text"
+    } > "$tmprc"
     exec "$shell_bin" --rcfile "$tmprc" -i
     ;;
   *)
     echo "review-shell: unknown shell '$shell_bin'; entering with no prompt prefix" >&2
+    printf '%s\n' "$banner_text"
     exec "$shell_bin" -i
     ;;
 esac

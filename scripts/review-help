@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+# Quick reference for the rapid-review workflow.
+#
+# Usage:
+#   review-help            print the cheatsheet (this)
+#   review-help --full     open docs/review-workflow.md in $PAGER
+
+set -euo pipefail
+
+# Resolve our own path (through symlinks) to find ../docs/review-workflow.md.
+_self="${BASH_SOURCE[0]}"
+while [ -L "$_self" ]; do _self="$(readlink "$_self")"; done
+_dir="$(cd "$(dirname "$_self")" && pwd)"
+_docs="$_dir/../docs/review-workflow.md"
+
+if [[ "${1:-}" == "--full" ]]; then
+  if [[ -f "$_docs" ]]; then
+    exec "${PAGER:-less}" "$_docs"
+  else
+    echo "review-help: full doc not found at $_docs" >&2
+    echo "  (only the cheatsheet is available in this install)" >&2
+    exit 1
+  fi
+fi
+
+cat <<EOF
+rapid-review — quick reference
+
+Shell commands:
+  review-start <slug> [<base>]    init a review store at the merge base
+  review-shell [<slug>]           subshell with GIT_DIR set
+  nvim-review [files…]            launch nvim with sidebar open
+  review-status [<slug>]          progress summary
+  review-list                     list stores for the current project
+  review-refresh [<slug>]         git fetch + pull (run OUTSIDE review-shell)
+  review-remaining [<slug>]       diff of remaining unreviewed code
+  review-end <slug> [--force]     delete a review store
+  review-help [--full]            this cheatsheet; --full opens the full doc
+
+Inside the nvim sidebar:
+  j / k          navigate
+  l / <CR>       open file in adjacent window (double-click also works)
+  o              open colored diff
+  s              toggle stage/unstage (V-select multiple rows to multi-stage)
+  c              commit reviewed batch
+  r              refresh
+  q              close
+
+Global <leader>r* keymaps (nvim):
+  rr             toggle sidebar
+  rd             open diff view              (sidebar-aware)
+  rf             stage file                  (sidebar-aware)
+  rh / rl        stage hunk / line range     (gitsigns; file buffer)
+  rc             commit batch
+  rs             status (floating window)
+  ru             refresh sidebar
+  rZ             undo last batch             (prompts)
+  rn             jump to next unreviewed file
+
+Full docs: $(test -f "$_docs" && echo "$_docs" || echo "(not bundled in this install)")
+Or run:    review-help --full
+EOF
