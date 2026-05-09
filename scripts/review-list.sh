@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# List all review stores for the current project.
+#
+# Usage:
+#   review-list
+
+set -euo pipefail
+_RV_SELF="${BASH_SOURCE[0]}"; while [ -L "$_RV_SELF" ]; do _RV_SELF="$(readlink "$_RV_SELF")"; done; source "$(cd "$(dirname "$_RV_SELF")" && pwd)/review-lib.sh"
+
+root=$(_rv_project_root)
+project_dir="$(_rv_project_dir)"
+
+if [[ ! -d "$root" ]]; then
+  echo "No review stores for $project_dir"
+  exit 0
+fi
+
+echo "Review stores for $project_dir:"
+echo
+
+slugs=()
+while IFS= read -r s; do slugs+=("$s"); done < <(_rv_list_slugs)
+
+if [[ ${#slugs[@]} -eq 0 ]]; then
+  echo "  (none)"
+  exit 0
+fi
+
+for slug in "${slugs[@]}"; do
+  store=$(_rv_store_dir "$slug")
+  base=$(_rv_state_read "$store" "BASE_SHA")
+  started=$(_rv_state_read "$store" "STARTED_AT")
+
+  review_base=$(_rv_state_read "$store" "REVIEW_BASE_COMMIT")
+  remaining=$(_rv_git "$store" diff --numstat 2>/dev/null || true)
+  staged=$(_rv_git "$store" diff --cached --numstat 2>/dev/null \
+            | awk 'NF >= 3 && ($1+$2) > 0' || true)
+  if [[ -n "$review_base" ]]; then
+    committed=$(_rv_git "$store" log --numstat --pretty=format: "${review_base}..HEAD" 2>/dev/null | grep -v '^$' || true)
+  else
+    committed=""
+  fi
+
+  count_add() { awk 'NF >= 3 && $1 ~ /^[0-9]+$/ {a+=$1} END {print a+0}' <<<"$1"; }
+
+  r_add=$(count_add "$remaining")
+  s_add=$(count_add "$staged")
+  c_add=$(count_add "$committed")
+  total=$((r_add + s_add + c_add))
+  done=$((s_add + c_add))
+
+  if [[ "$total" -eq 0 ]]; then
+    pct="—"
+  else
+    pct=$(printf "%d%%" $(( done * 100 / total )))
+  fi
+
+  printf "  %-20s  base %s  started %s  progress %s\n" \
+    "$slug" "${base:0:8}" "${started:-?}" "$pct"
+done
