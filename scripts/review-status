@@ -14,6 +14,8 @@ base_sha=$(_rv_state_read "$store" "BASE_SHA")
 pr_ref=$(_rv_state_read "$store" "PR_REF")
 started_at=$(_rv_state_read "$store" "STARTED_AT")
 refreshed_at=$(_rv_state_read "$store" "LAST_REFRESHED_AT")
+mode=$(_rv_state_read "$store" "MODE"); [[ -z "$mode" ]] && mode="remote"
+snapshot_tree=$(_rv_state_read "$store" "SNAPSHOT_TREE")
 
 # Files: count from numstat snapshots.
 #   remaining = working tree vs index (unstaged = "still to review")
@@ -63,14 +65,27 @@ untouched_files=$(comm -23 <(printf "%s\n" "$remaining_files" | grep .) <(printf
 partial_files=$(( total_files - reviewed_files - untouched_files ))
 [[ "$partial_files" -lt 0 ]] && partial_files=0
 
-cat <<EOF
-PR: $slug  base: ${base_sha:0:8}  head: ${pr_ref:-?}
+if [[ "$mode" == "local" ]]; then
+  cat <<EOF
+Review: $slug  (local mode)
+Baseline:  ${base_sha:0:8}
+Snapshot:  ${snapshot_tree:0:8}
+Started:   ${started_at:-?}
+Refreshed: ${refreshed_at:-?}   (run \`review-refresh $slug\` to pull in latest edits)
+
+Files:    $reviewed_files reviewed  /  $partial_files partial  /  $untouched_files untouched   ($total_files total)
+Lines:  +$done_add / +$total_add reviewed  ($(pct "$done_add" "$total_add"))   −$done_del / −$total_del reviewed  ($(pct "$done_del" "$total_del"))
+EOF
+else
+  cat <<EOF
+Review: $slug  base: ${base_sha:0:8}  head: ${pr_ref:-?}
 Started:   ${started_at:-?}
 Refreshed: ${refreshed_at:-?}
 
 Files:    $reviewed_files reviewed  /  $partial_files partial  /  $untouched_files untouched   ($total_files total)
 Lines:  +$done_add / +$total_add reviewed  ($(pct "$done_add" "$total_add"))   −$done_del / −$total_del reviewed  ($(pct "$done_del" "$total_del"))
 EOF
+fi
 
 if [[ "$untouched_files" -gt 0 ]]; then
   echo

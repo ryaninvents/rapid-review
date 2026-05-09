@@ -55,6 +55,7 @@ for slug in "${slugs[@]}"; do
     pct=$(printf "%d%%" $(( done * 100 / total )))
   fi
 
-  printf "  %-20s  base %s  started %s  progress %s\n" \
-    "$slug" "${base:0:8}" "${started:-?}" "$pct"
+  mode=$(_rv_state_read "$store" "MODE"); [[ -z "$mode" ]] && mode="remote"
+  printf "  %-20s  [%-6s]  base %s  started %s  progress %s\n" \
+    "$slug" "$mode" "${base:0:8}" "${started:-?}" "$pct"
 done

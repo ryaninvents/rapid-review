@@ -4,9 +4,15 @@ Stage chunks of a large PR as you read them. The diff shrinks as you progress. N
 
 The trick: a side `git` store (using `--git-dir`) whose HEAD is "what I've already reviewed." Your real `.git/` is never touched.
 
+Two modes:
+- **Remote** (the default): review a PR branch against its merge base. New pushes to the PR appear via `review-refresh` (`git fetch && git pull`).
+- **Local** (`--local`): review a frozen snapshot of the current working tree against a baseline ref (default HEAD). Useful for AI-driven local edits where there's no remote branch yet. `review-refresh` re-snapshots the working tree.
+
 ---
 
 ## TL;DR
+
+### Remote mode — reviewing a PR branch
 
 ```bash
 git checkout pr-branch
@@ -18,7 +24,24 @@ nvim-review                      # nvim with sidebar open, file explorer closed
 git commit -m "reviewed: auth"   # (or `c` in the sidebar; or <leader>rc)
 review-status                    # progress
 exit                             # leave the shell when done for now
+review-refresh pr-123            # later: pull in new commits from origin
 review-end pr-123                # delete the store when fully reviewed
+```
+
+### Local mode — reviewing AI changes against a frozen snapshot
+
+```bash
+# Working dir has uncommitted AI edits.
+review-start --local pr-local            # baseline = HEAD; snapshot = current working tree
+review-shell pr-local                    # drops into ~/.review/<hash>/pr-local/snapshot/
+nvim-review                              # review the snapshot exactly like a PR
+
+# Meanwhile the AI keeps editing the real project — your snapshot is frozen.
+
+review-refresh pr-local                  # pull the AI's latest edits INTO the snapshot.
+                                          # already-reviewed staged content stays staged;
+                                          # re-touched lines reappear as fresh diff.
+review-end pr-local                      # done
 ```
 
 ---
@@ -29,13 +52,21 @@ review-end pr-123                # delete the store when fully reviewed
 > `git diff` = "what's left."
 
 - Each commit in the review store advances your reviewed pointer.
-- The working tree is the PR head (set by your normal `git checkout`).
-- `git diff HEAD` (inside the review shell) shows everything you haven't staged or committed yet.
-- After `git pull`, any line that was in a commit you'd "reviewed" but was then changed reappears in the diff. That's the point — you re-read only the lines someone touched since.
+- The "work tree" being reviewed is:
+  - **Remote mode**: the PR head (live project directory, set by your normal `git checkout`).
+  - **Local mode**: a frozen snapshot of the project's working tree at last `review-start --local` / `review-refresh`, materialized into `~/.review/<hash>/<slug>/snapshot/`.
+- `git diff` (inside the review shell) shows everything you haven't staged or committed yet.
+- When the work-tree advances (remote: `git pull`; local: `review-refresh`), any line that was in a hunk you'd "reviewed" but has since changed reappears in the diff. That's the point — you re-read only the lines that moved.
 
 ---
 
 ## Lifecycle
+
+> The lifecycle below is written for remote (PR-branch) mode. For local
+> mode, replace step 1 with "have a dirty working tree" and step 2 with
+> `review-start --local <slug>` — everything else (sidebar, keymaps, commit,
+> end) is identical. The only behavior difference is `review-refresh`,
+> which re-snapshots the working tree instead of running `git fetch`.
 
 ### 1. Check out the PR
 
@@ -151,15 +182,57 @@ Confirms first if there's still unreviewed code. Deletes the store.
 
 | Command | Purpose |
 |---|---|
-| `review-start <slug> [<base>]` | Init review store at the merge base |
-| `review-shell [<slug>]` | Subshell with `GIT_DIR` set |
+| `review-start <slug> [<base>]` | Init review store (remote mode) at the merge base |
+| `review-start --local <slug> [<base>]` | Init review store (local mode) — snapshot the working tree, baseline = `<base>` (default HEAD) |
+| `review-shell [<slug>]` | Subshell with `GIT_DIR` set; auto-cd's into `snapshot/` for local mode |
 | `nvim-review [files…]` | Launch nvim with sidebar open + file explorer closed (run from inside `review-shell`) |
-| `review-status [<slug>]` | Progress summary |
-| `review-list` | All active stores for `$PWD` |
-| `review-refresh [<slug>]` | `git fetch` + `git pull --ff-only` (run outside review-shell) |
+| `review-status [<slug>]` | Progress summary (shows mode) |
+| `review-list` | All active stores for `$PWD`, tagged remote/local |
+| `review-refresh [<slug>]` | Remote: `git fetch` + `git pull --ff-only`. Local: re-snapshot the working tree. (Run outside review-shell.) |
 | `review-remaining [<slug>] [-- <git-diff-args>]` | Diff of remaining unreviewed code |
 | `review-end <slug> [--force]` | Delete the store |
 | `review-help [--full]` | Cheatsheet (or open this doc in `$PAGER`) |
+
+---
+
+## Local mode (AI-driven changes)
+
+When the AI is editing your project and you want to review *as it works*,
+remote mode doesn't fit — there's no PR branch yet, and the working tree
+keeps shifting under you. Local mode solves both:
+
+```bash
+# Setup: working tree has uncommitted AI edits.
+review-start --local pr-local            # baseline = HEAD; snapshot = working tree right now
+review-shell pr-local                    # drops into ~/.review/<hash>/pr-local/snapshot/
+nvim-review                              # review just like a PR
+```
+
+The review surface is `snapshot/` — a frozen materialization of the working
+tree at `review-start` time. The AI keeps editing the *real* project; your
+review is unaffected.
+
+When you want to pull in the AI's latest work:
+
+```bash
+review-refresh pr-local                  # re-snapshot the project working tree
+```
+
+Anything you'd already staged stays staged. Lines the AI re-modified
+reappear in the diff — same semantic as a PR force-push touching reviewed
+code.
+
+**Gotchas:**
+- Gitignored files (`node_modules/`, build dirs) aren't in the snapshot.
+  LSP / language tooling may misbehave when you open files inside
+  `snapshot/`. The review surface itself is intact; only language-server
+  features tied to dependencies are affected.
+- The snapshot dir is conceptually read-only. Edits you make there don't
+  flow back to the real project, and the next `review-refresh` overwrites
+  them. Stage / commit through the review tooling as usual; don't edit
+  source content in `snapshot/`.
+- No automatic refresh. Snapshot only updates when you run
+  `review-refresh`. By design — that's the whole point.
 
 ---
 

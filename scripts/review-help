@@ -27,15 +27,19 @@ cat <<EOF
 rapid-review — quick reference
 
 Shell commands:
-  review-start <slug> [<base>]    init a review store at the merge base
-  review-shell [<slug>]           subshell with GIT_DIR set
-  nvim-review [files…]            launch nvim with sidebar open
-  review-status [<slug>]          progress summary
-  review-list                     list stores for the current project
-  review-refresh [<slug>]         git fetch + pull (run OUTSIDE review-shell)
-  review-remaining [<slug>]       diff of remaining unreviewed code
-  review-end <slug> [--force]     delete a review store
-  review-help [--full]            this cheatsheet; --full opens the full doc
+  review-start <slug> [<base>]            init a review store (remote/PR mode)
+  review-start --local <slug> [<base>]    init for reviewing a frozen snapshot
+                                          of the working tree (e.g. AI changes)
+  review-shell [<slug>]                   subshell with GIT_DIR set
+  nvim-review [files…]                    launch nvim with sidebar open
+  review-status [<slug>]                  progress summary (shows mode)
+  review-list                             list stores; tagged remote/local
+  review-refresh [<slug>]                 remote: git fetch + pull
+                                          local:  re-snapshot working tree
+                                          (run OUTSIDE review-shell)
+  review-remaining [<slug>]               diff of remaining unreviewed code
+  review-end <slug> [--force]             delete a review store
+  review-help [--full]                    this cheatsheet; --full opens the doc
 
 Inside the nvim sidebar:
   j / k          navigate

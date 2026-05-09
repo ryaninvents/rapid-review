@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
-# Refresh the working tree from origin and report new outstanding diff.
+# Refresh a review store.
 #
 # Usage:
 #   review-refresh [<pr-slug>]
 #
-# Runs `git fetch && git pull --ff-only` in the real repo (must be run from
-# the project directory, NOT inside review-shell), then prints the change.
+# Remote mode: runs `git fetch && git pull --ff-only` in the real project
+# repo, then prints the new outstanding diff.
+# Local mode:  re-captures the project's current working tree as a snapshot,
+# materializes it into $store/snapshot/, and refreshes intent-to-add markers.
+# HEAD and staged content are NOT touched — already-reviewed hunks stay
+# reviewed; lines the AI re-modified reappear in the diff.
+#
+# Run from outside `review-shell` (we need to read the real project state).
 
 set -euo pipefail
 _RV_SELF="${BASH_SOURCE[0]}"; while [ -L "$_RV_SELF" ]; do _RV_SELF="$(readlink "$_RV_SELF")"; done; source "$(cd "$(dirname "$_RV_SELF")" && pwd)/review-lib.sh"
 
-# Reject if invoked inside review-shell — we need the real repo.
 if [[ -n "${REVIEW_SLUG:-}" ]]; then
   echo "review-refresh: do not run inside review-shell — exit first, then refresh." >&2
   exit 1
@@ -18,21 +23,52 @@ fi
 
 slug=$(_rv_resolve_slug "${1:-}")
 store=$(_rv_store_dir "$slug")
+mode="$(_rv_state_read "$store" "MODE")"
+[[ -z "$mode" ]] && mode="remote"
 
-if ! git rev-parse --git-dir >/dev/null 2>&1; then
-  echo "review-refresh: $PWD is not inside a git repo" >&2
-  exit 1
+# We need to read project state; ensure we're either inside the project repo
+# (current $PWD) or have it stored.
+project_dir="$(_rv_state_read "$store" "PROJECT_DIR")"
+if [[ -z "$project_dir" ]]; then
+  if git rev-parse --git-dir >/dev/null 2>&1; then
+    project_dir="$PWD"
+  else
+    echo "review-refresh: PROJECT_DIR not in state and \$PWD isn't a git repo" >&2
+    exit 1
+  fi
 fi
 
-echo "Fetching origin..."
-git fetch --quiet
-echo "Pulling current branch..."
-git pull --ff-only --quiet || {
-  echo "review-refresh: pull is not fast-forward; resolve manually." >&2
-  exit 1
-}
-
-_rv_state_write "$store" "LAST_REFRESHED_AT" "$(_rv_now)"
+if [[ "$mode" == "local" ]]; then
+  echo "Capturing snapshot of $project_dir..."
+  snapshot_tree=$(_rv_capture_snapshot "$project_dir")
+  if [[ -z "$snapshot_tree" ]]; then
+    echo "review-refresh: failed to capture snapshot" >&2
+    exit 1
+  fi
+  prev=$(_rv_state_read "$store" "SNAPSHOT_TREE")
+  if [[ "$snapshot_tree" == "$prev" ]]; then
+    echo "Snapshot unchanged (${snapshot_tree:0:8}) — nothing to refresh."
+  else
+    echo "  ${prev:0:8} → ${snapshot_tree:0:8}"
+    _rv_materialize_snapshot "$store" "$snapshot_tree"
+    _rv_intent_to_add_untracked "$store"
+    _rv_state_write "$store" "SNAPSHOT_TREE" "$snapshot_tree"
+  fi
+  _rv_state_write "$store" "LAST_REFRESHED_AT" "$(_rv_now)"
+else
+  if ! (cd "$project_dir" && git rev-parse --git-dir >/dev/null 2>&1); then
+    echo "review-refresh: $project_dir is not inside a git repo" >&2
+    exit 1
+  fi
+  echo "Fetching origin..."
+  (cd "$project_dir" && git fetch --quiet)
+  echo "Pulling current branch..."
+  (cd "$project_dir" && git pull --ff-only --quiet) || {
+    echo "review-refresh: pull is not fast-forward; resolve manually." >&2
+    exit 1
+  }
+  _rv_state_write "$store" "LAST_REFRESHED_AT" "$(_rv_now)"
+fi
 
 echo
 echo "Outstanding diff after refresh:"

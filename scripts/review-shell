@@ -9,29 +9,46 @@ _RV_SELF="${BASH_SOURCE[0]}"; while [ -L "$_RV_SELF" ]; do _RV_SELF="$(readlink 
 
 slug=$(_rv_resolve_slug "${1:-}")
 store=$(_rv_store_dir "$slug")
-project_dir="$(_rv_project_dir)"
+project_dir="$(_rv_state_read "$store" "PROJECT_DIR")"
+[[ -z "$project_dir" ]] && project_dir="$(_rv_project_dir)"
+mode="$(_rv_state_read "$store" "MODE")"
+[[ -z "$mode" ]] && mode="remote"
 
 if [[ ! -d "$store/repo" ]]; then
   echo "review-shell: no store at $store" >&2
   exit 1
 fi
 
+# Determine the work-tree for this store.
+if [[ "$mode" == "local" ]]; then
+  work_tree="$store/snapshot"
+  if [[ ! -d "$work_tree" ]]; then
+    echo "review-shell: snapshot dir missing at $work_tree" >&2
+    echo "  rerun: review-end $slug && review-start --local $slug" >&2
+    exit 1
+  fi
+else
+  work_tree="$project_dir"
+fi
+
 # Refresh intent-to-add markers for any untracked files that appeared since
-# the store was created (e.g. after a `git pull` brought in new PR files).
-# This ensures `git diff HEAD` continues to show the full unreviewed diff.
+# the store was last touched (e.g. after a `git pull` brought in new PR
+# files, or a `review-refresh` in local mode added new files to the snapshot).
+# This ensures `git diff` continues to show the full unreviewed surface.
 while IFS= read -r -d '' f; do
-  git --git-dir="$store/repo" --work-tree="$project_dir" \
+  git --git-dir="$store/repo" --work-tree="$work_tree" \
       add --intent-to-add -- "$f" 2>/dev/null || true
-done < <(git --git-dir="$store/repo" --work-tree="$project_dir" \
+done < <(git --git-dir="$store/repo" --work-tree="$work_tree" \
            ls-files --others --exclude-standard -z 2>/dev/null)
 
 # Pick the user's shell; default zsh on macOS.
 shell_bin="${SHELL:-/bin/zsh}"
 
 export GIT_DIR="$store/repo"
-export GIT_WORK_TREE="$project_dir"
+export GIT_WORK_TREE="$work_tree"
 export REVIEW_SLUG="$slug"
 export REVIEW_STORE="$store"
+export REVIEW_MODE="$mode"
 
 # Custom prompt prefix — works for zsh and bash. Avoid clobbering user prompts:
 # we set RPS1 (zsh) or PS1 prefix (bash) only for the spawned shell.
@@ -39,12 +56,27 @@ prompt_prefix="(review:${slug}) "
 
 # Banner printed once when the spawned shell starts. Kept short — full
 # reference is `review-help` (or `review-help --full`).
-banner_text=$(cat <<EOF
+if [[ "$mode" == "local" ]]; then
+  banner_text=$(cat <<EOF
+
+  📋 review:${slug} (local) — reviewing a frozen snapshot
+     'review-help' · 'nvim-review' · 'review-refresh' to pull in latest edits
+
+EOF
+)
+else
+  banner_text=$(cat <<EOF
 
   📋 review:${slug} — type 'review-help' for commands · 'nvim-review' to start
 
 EOF
 )
+fi
+
+# In local mode, drop the user into the snapshot dir so opened files reflect
+# what's being reviewed, not the (still-changing) live project tree.
+cd_target=""
+[[ "$mode" == "local" ]] && cd_target="$work_tree"
 
 case "$(basename "$shell_bin")" in
   zsh)
@@ -54,6 +86,7 @@ case "$(basename "$shell_bin")" in
     {
       echo "[[ -f \"\$HOME/.zshrc\" ]] && source \"\$HOME/.zshrc\""
       echo "PROMPT=\"%F{cyan}${prompt_prefix}%f\$PROMPT\""
+      [[ -n "$cd_target" ]] && echo "cd \"$cd_target\""
       printf 'cat <<'\''__RR_BANNER__'\''\n%s\n__RR_BANNER__\n' "$banner_text"
     } > "$tmpdir/.zshrc"
     ZDOTDIR="$tmpdir" exec "$shell_bin" -i
@@ -64,12 +97,14 @@ case "$(basename "$shell_bin")" in
     {
       echo "[[ -f \"\$HOME/.bashrc\" ]] && source \"\$HOME/.bashrc\""
       echo "PS1=\"\\[\\e[36m\\]${prompt_prefix}\\[\\e[0m\\]\$PS1\""
+      [[ -n "$cd_target" ]] && echo "cd \"$cd_target\""
       printf 'cat <<'\''__RR_BANNER__'\''\n%s\n__RR_BANNER__\n' "$banner_text"
     } > "$tmprc"
     exec "$shell_bin" --rcfile "$tmprc" -i
     ;;
   *)
     echo "review-shell: unknown shell '$shell_bin'; entering with no prompt prefix" >&2
+    [[ -n "$cd_target" ]] && cd "$cd_target"
     printf '%s\n' "$banner_text"
     exec "$shell_bin" -i
     ;;

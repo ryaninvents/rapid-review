@@ -4,6 +4,13 @@ Review large PRs incrementally in your terminal: stage chunks you've already
 read, see new commits to the PR re-expose any reviewed code that someone
 amended. Built on `git --git-dir` — your real `.git/` is never touched.
 
+Two modes:
+- **Remote** (default): review a PR branch against its merge base.
+- **Local** (`--local`): review a frozen snapshot of the current working tree
+  against a baseline ref (default `HEAD`). Built for AI-driven local edits
+  where there's no remote branch yet — `review-refresh` re-snapshots the
+  working tree to bring in the AI's latest work.
+
 See [`docs/review-workflow.md`](docs/review-workflow.md) for the full reference and quickstart.
 
 ---
@@ -110,6 +117,8 @@ docs/review-workflow.md     # full reference
 
 ## Quickstart
 
+### Remote (PR-branch) review
+
 ```bash
 git checkout pr-branch
 review-start pr-123
@@ -119,6 +128,18 @@ nvim-review
 # In nvim: <leader>rr toggles the sidebar (already open via nvim-review).
 # `s` toggles staged for the file under cursor; V-select then `s` toggles
 # the whole group. `o` opens a colored diff. `c` commits a batch.
+```
+
+### Local (snapshot) review — for AI-driven changes
+
+```bash
+# Working dir has uncommitted AI edits.
+review-start --local pr-local            # baseline = HEAD; snapshot = working tree right now
+review-shell pr-local                    # drops into ~/.review/<hash>/pr-local/snapshot/
+nvim-review                              # same review experience as PR mode
+
+# Meanwhile the AI keeps editing the real project — your snapshot stays frozen.
+review-refresh pr-local                  # later: re-snapshot to pull in the latest AI work
 ```
 
 ## Keymaps
