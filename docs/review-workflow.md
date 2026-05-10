@@ -117,8 +117,8 @@ In the sidebar:
 | `j` / `k` | move down / up |
 | `l` (or `<CR>`) | open file in adjacent window |
 | `o` | open colored diff in adjacent window |
-| `<Space>` | toggle stage/unstage for the file under cursor |
-| `V`-select rows then `<Space>` | stage every selected file in one go |
+| `s` | toggle staged for the file under cursor |
+| `V`-select rows then `s` | toggle staged for the selection — stages all if any unstaged; else unstages all |
 | `c` | prompt for commit message and commit staged files |
 | `r` | refresh |
 | `q` | close sidebar |
