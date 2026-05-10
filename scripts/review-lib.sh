@@ -180,21 +180,30 @@ _rv_intent_to_add_untracked() {
 }
 
 # Resolve a base ref for `review-start`: explicit arg, else merge-base with main/master.
+# Always returns the merge-base of HEAD with the resolved ref, so that only the
+# changes introduced by the current branch are shown (not accumulated upstream commits).
 _rv_default_base() {
   local explicit="${1:-}"
+  local ref
   if [[ -n "$explicit" ]]; then
-    git rev-parse "$explicit" 2>/dev/null && return 0
-    echo "review-lib: cannot resolve base ref '$explicit'" >&2
-    return 1
-  fi
-  for branch in main master; do
-    if git rev-parse --verify "$branch" >/dev/null 2>&1; then
-      git merge-base HEAD "$branch"
-      return 0
+    if ! ref=$(git rev-parse "$explicit" 2>/dev/null); then
+      echo "review-lib: cannot resolve base ref '$explicit'" >&2
+      return 1
     fi
-  done
-  echo "review-lib: no main or master branch found; pass an explicit base ref" >&2
-  return 1
+  else
+    ref=""
+    for branch in main master; do
+      if git rev-parse --verify "$branch" >/dev/null 2>&1; then
+        ref=$(git rev-parse "$branch")
+        break
+      fi
+    done
+    if [[ -z "$ref" ]]; then
+      echo "review-lib: no main or master branch found; pass an explicit base ref" >&2
+      return 1
+    fi
+  fi
+  git merge-base HEAD "$ref"
 }
 
 # Resolve a base ref for `review-start --local`: explicit arg, else HEAD.
