@@ -54,6 +54,13 @@ antigen bundle ryaninvents/rapid-review
 That puts `review-start`, `review-shell`, `nvim-review`, and friends on
 `$PATH`. Reload your shell or `antigen apply`.
 
+To update:
+
+```zsh
+antigen update ryaninvents/rapid-review   # this bundle only
+antigen update                            # all bundles
+```
+
 ### Shell scripts (Oh My Zsh)
 
 ```zsh
