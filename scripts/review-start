@@ -49,7 +49,9 @@ if ! git rev-parse --git-dir >/dev/null 2>&1; then
   exit 1
 fi
 
-real_git_dir=$(git rev-parse --absolute-git-dir)
+# Use the COMMON git dir so the object store resolves correctly inside a
+# linked worktree, where the per-worktree git dir has no objects/ of its own.
+real_git_dir=$(cd "$(git rev-parse --git-common-dir)" && pwd)
 project_dir="$(_rv_project_dir)"
 store="$(_rv_store_dir "$slug")"
 
